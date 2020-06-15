@@ -9,29 +9,36 @@
 import UIKit
 import CoreLocation
 import MapKit
+import Combine
 
-class YelpViewController: UIViewController, CLLocationManagerDelegate, MKMapViewDelegate {
+
+class YelpViewController: UIViewController, CLLocationManagerDelegate, MKMapViewDelegate, UITableViewDelegate, UITableViewDataSource {
     
     // MARK: - IBOutlets
     @IBOutlet weak var tableView: UITableView!
     @IBOutlet weak var mapView: MKMapView!
+    @IBOutlet weak var tableViewToMapConstraint: NSLayoutConstraint!
     
-    let locationManager = CLLocationManager()
-    var localValue: CLLocationCoordinate2D? = nil
-    let viewModel = YelpViewModel()
+    private let locationManager = CLLocationManager()
+    private var localValue: CLLocationCoordinate2D? = nil
+    private let yelpNetworking = YelpNetworking()
+    private var restaurants = [Restaurant]()
     
     override func viewDidLoad() {
         super.viewDidLoad()
         locationManager.requestWhenInUseAuthorization()
         mapView.delegate = self
-        tableView.delegate = self
-        tableView.dataSource = self
+        mapView.showsUserLocation = true
+        
+        setupTableView()
         
         if CLLocationManager.locationServicesEnabled() {
             locationManager.delegate = self
             locationManager.desiredAccuracy = kCLLocationAccuracyNearestTenMeters
             locationManager.startUpdatingLocation()
         }
+        
+        
     }
     
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
@@ -39,8 +46,23 @@ class YelpViewController: UIViewController, CLLocationManagerDelegate, MKMapView
         guard let locValue: CLLocationCoordinate2D = manager.location?.coordinate else { return }
         if localValue == nil {
             localValue = locValue
-        //view model fetch restaurants
-            // update tableview
+            yelpNetworking.getRestaurantsFor(lattitude: locValue.latitude, longitude: locValue.longitude, success: { [weak self] (container) in
+                let sorted = container.restaurants.sorted(by: { $0.distance > $1.distance })
+                self?.restaurants = sorted
+                DispatchQueue.main.async {
+                    self?.tableView.reloadData()
+                    self?.tableView.alpha = 1
+                    self?.tableViewToMapConstraint.constant = -250
+                }
+            }, failure: { (error) in
+                print("error: \(error.localizedDescription)")
+                let alert = UIAlertController(title: "Error", message: error.localizedDescription, preferredStyle: .alert)
+                let okAction = UIAlertAction(title: "OK", style: .cancel, handler: nil)
+                alert.addAction(okAction)
+                self.present(alert, animated: true, completion: nil)
+            })
+            
+
 
         }
         if let localCoordinate = localValue {
@@ -50,22 +72,40 @@ class YelpViewController: UIViewController, CLLocationManagerDelegate, MKMapView
         }
     }
     
+    func setupTableView() {
+        tableView.delegate = self
+        tableView.dataSource = self
+        tableView.rowHeight = UITableView.automaticDimension
+        tableView.estimatedRowHeight = 400.0
+        tableView.register(UITableViewCell.self, forCellReuseIdentifier: "RestaurantCell")
+
+        let headerView = UIView(frame: CGRect(x: 8, y: 8, width: tableView.frame.size.width, height: 50))
+        let searchResultsLabel = UILabel()
+        searchResultsLabel.text = "Saerch Result: \(self.restaurants.count)"
+        headerView.addSubview(searchResultsLabel)
+        tableView.tableHeaderView = headerView
+        
+
+        tableViewToMapConstraint.constant = 0
+        tableView.alpha = 0
+    }
     
     
+    // MARK: - TableView Delegates
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        return restaurants.count
+    }
+    
+    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        guard let cell: RestaurantTableViewCell = tableView.dequeueReusableCell(withIdentifier: "RestaurantCell", for: indexPath) as? RestaurantTableViewCell else { return UITableViewCell() }
+//        guard let cell: RestaurantTableViewCell = tableView.dequeueReusableCell(withIdentifier: "RestaurantCell") as? RestaurantTableViewCell else { return UITableViewCell() }
+        let restaurant = self.restaurants[indexPath.row]
+        cell.configure(restaurant: restaurant) {
+            print("make call from here")
+        }
+        return cell
+    }
 
 }
 
-
-// MARK: - TableView Delegates
-extension YelpViewController: UITableViewDelegate, UITableViewDataSource {
-     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-           return 1
-       }
-       
-       func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-            let cell = UITableViewCell()
-            cell.backgroundColor = .green
-            return cell
-       }
-}
 
