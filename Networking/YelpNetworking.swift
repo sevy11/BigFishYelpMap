@@ -15,9 +15,6 @@ let clientID = "n46XV4RIvhfNm5Fex6CQaQ"
 let baseURL = "https://api.yelp.com/v3"
 let restaurantSearch = "/businesses/search?term=restaurants"
 
-//GET https://api.yelp.com/v3/businesses/search?term=delis&latitude=37.786882&longitude=-122.399972
-//GET https://api.yelp.com/v3/businesses/north-india-restaurant-san-francisco
-
 final class YelpNetworking {
     func getRestaurantsFor(lattitude: CLLocationDegrees, longitude: CLLocationDegrees, success: @escaping (_ container: Container) -> Void, failure: @escaping (_ error: Error) -> Void) {
         
@@ -35,9 +32,7 @@ final class YelpNetworking {
             do {
                 if let data = data {
                     let restaurants = try JSONDecoder().decode(Container.self, from: data)
-                    //let restaurant =  try JSONSerialization.jsonObject(with: data, options: []) as! [String: Any]
-                    print(">>>>>", restaurants, #line, "<<<<<<<<<")
-                    //                print("res: \(restaurant)")
+                    print("got restaurants")
                     success(restaurants)
                 }
             } catch {
