@@ -9,28 +9,31 @@
 import UIKit
 import CoreLocation
 import MapKit
-import Combine
 
-
-class YelpViewController: UIViewController, CLLocationManagerDelegate, MKMapViewDelegate, UITableViewDelegate, UITableViewDataSource {
+class YelpViewController: UIViewController, CLLocationManagerDelegate, MKMapViewDelegate {
     
     // MARK: - IBOutlets
-    @IBOutlet weak var tableView: UITableView!
     @IBOutlet weak var mapView: MKMapView!
-    @IBOutlet weak var tableViewToMapConstraint: NSLayoutConstraint!
+    @IBOutlet weak var restaurantView: UIView!
+    @IBOutlet weak var restaurantImageView: UIImageView!
+    @IBOutlet weak var nameLabel: UILabel!
+    @IBOutlet weak var addressLabel: UILabel!
+    @IBOutlet weak var isClosedLabel: UILabel!
+    @IBOutlet weak var distanceLabel: UILabel!
+    @IBOutlet weak var restaurantViewToTopConstraint: NSLayoutConstraint!
     
     private let locationManager = CLLocationManager()
     private var localValue: CLLocationCoordinate2D? = nil
     private let yelpNetworking = YelpNetworking()
     private var restaurants = [Restaurant]()
-    
+    private var restaurant: Restaurant?
+    private var isShowing = false
+
     override func viewDidLoad() {
         super.viewDidLoad()
         locationManager.requestWhenInUseAuthorization()
         mapView.delegate = self
         mapView.showsUserLocation = true
-        
-        setupTableView()
         
         if CLLocationManager.locationServicesEnabled() {
             locationManager.delegate = self
@@ -47,12 +50,12 @@ class YelpViewController: UIViewController, CLLocationManagerDelegate, MKMapView
         if localValue == nil {
             localValue = locValue
             yelpNetworking.getRestaurantsFor(lattitude: locValue.latitude, longitude: locValue.longitude, success: { [weak self] (container) in
-                let sorted = container.restaurants.sorted(by: { $0.distance > $1.distance })
+                let sorted = container.restaurants.sorted(by: { $1.distance > $0.distance })
                 self?.restaurants = sorted
+                self?.restaurant = sorted.first!
                 DispatchQueue.main.async {
-                    self?.tableView.reloadData()
-                    self?.tableView.alpha = 1
-                    self?.tableViewToMapConstraint.constant = -250
+                    self?.addPins(restaurants: sorted)
+                    self?.setRestaurantView(restaurant: (self?.restaurant)!)
                 }
             }, failure: { (error) in
                 print("error: \(error.localizedDescription)")
@@ -61,9 +64,6 @@ class YelpViewController: UIViewController, CLLocationManagerDelegate, MKMapView
                 alert.addAction(okAction)
                 self.present(alert, animated: true, completion: nil)
             })
-            
-
-
         }
         if let localCoordinate = localValue {
             let center = CLLocationCoordinate2D(latitude: localCoordinate.latitude, longitude: localCoordinate.longitude)
@@ -72,40 +72,59 @@ class YelpViewController: UIViewController, CLLocationManagerDelegate, MKMapView
         }
     }
     
-    func setupTableView() {
-        tableView.delegate = self
-        tableView.dataSource = self
-        tableView.rowHeight = UITableView.automaticDimension
-        tableView.estimatedRowHeight = 400.0
-        tableView.register(UITableViewCell.self, forCellReuseIdentifier: "RestaurantCell")
+    @IBAction func onCallButtonTapped(_ sender: Any) {
+        if let res = restaurant {
+            print("make call at: \(res.phone)")
 
-        let headerView = UIView(frame: CGRect(x: 8, y: 8, width: tableView.frame.size.width, height: 50))
-        let searchResultsLabel = UILabel()
-        searchResultsLabel.text = "Saerch Result: \(self.restaurants.count)"
-        headerView.addSubview(searchResultsLabel)
-        tableView.tableHeaderView = headerView
-        
+            let noForwardBarcket = res.phone.replacingOccurrences(of: "(", with: "")
+            let noBackwareBrack = noForwardBarcket.replacingOccurrences(of: ")", with: "")
+            let noSpace = noBackwareBrack.replacingOccurrences(of: " ", with: "")
+            let noDash = noSpace.replacingOccurrences(of: "-", with: "")
 
-        tableViewToMapConstraint.constant = 0
-        tableView.alpha = 0
-    }
-    
-    
-    // MARK: - TableView Delegates
-    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return restaurants.count
-    }
-    
-    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        guard let cell: RestaurantTableViewCell = tableView.dequeueReusableCell(withIdentifier: "RestaurantCell", for: indexPath) as? RestaurantTableViewCell else { return UITableViewCell() }
-//        guard let cell: RestaurantTableViewCell = tableView.dequeueReusableCell(withIdentifier: "RestaurantCell") as? RestaurantTableViewCell else { return UITableViewCell() }
-        let restaurant = self.restaurants[indexPath.row]
-        cell.configure(restaurant: restaurant) {
-            print("make call from here")
+            if let url = URL(string: "tel://\(noDash)"),
+                UIApplication.shared.canOpenURL(url) {
+                if #available(iOS 10, *) {
+                    UIApplication.shared.open(url)
+                } else {
+                    UIApplication.shared.openURL(url)
+                }
+            }
         }
-        return cell
     }
-
+    
+    func setRestaurantView(restaurant: Restaurant) {
+        if let url = URL(string: restaurant.image) {
+            restaurantImageView.setImage(from: url)
+        }
+        nameLabel.text = restaurant.name
+        isClosedLabel.text = restaurant.isClosed ? "CLOSED" : "OPEN"
+        isClosedLabel.textColor = restaurant.isClosed ? .red : .green
+        if restaurant.location.display_address[1].count > 0 {
+            addressLabel.text = restaurant.location.display_address.first! + restaurant.location.display_address[1]
+        } else {
+            addressLabel.text = restaurant.location.display_address.first!
+        }
+        distanceLabel.text = String(format: "%.2f m", restaurant.distance)
+    }
+    
+    func addPins(restaurants: [Restaurant]) {
+        for res in restaurants {
+            let annotation = MKPointAnnotation()
+            annotation.coordinate = CLLocationCoordinate2D(latitude: res.coordinates.latitude, longitude: res.coordinates.longitude)
+            annotation.title = res.name
+            mapView.addAnnotation(annotation)
+        }
+    }
+    
+    func mapView(_ mapView: MKMapView, didSelect view: MKAnnotationView) {
+        let ann = self.mapView.selectedAnnotations[0] as MKAnnotation
+        for res in restaurants {
+            if ann.title == res.name {
+                self.restaurant = res
+                self.setRestaurantView(restaurant: res)
+            }
+        }
+    }
 }
 
 
