@@ -27,7 +27,6 @@ class YelpViewController: UIViewController, CLLocationManagerDelegate, MKMapView
     private let yelpNetworking = YelpNetworking()
     private var restaurants = [Restaurant]()
     private var restaurant: Restaurant?
-    private var isShowing = false
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -47,6 +46,7 @@ class YelpViewController: UIViewController, CLLocationManagerDelegate, MKMapView
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
 
         guard let locValue: CLLocationCoordinate2D = manager.location?.coordinate else { return }
+        
         if localValue == nil {
             localValue = locValue
             yelpNetworking.getRestaurantsFor(lattitude: locValue.latitude, longitude: locValue.longitude, success: { [weak self] (container) in
